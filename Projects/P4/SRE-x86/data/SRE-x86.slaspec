@@ -1,0 +1,300 @@
+@define SIZE  "4"
+@define STACKPTR "ESP"
+
+#define endianess
+define endian=little;
+
+#define address spaces
+define space ram type=ram_space size=4 default;
+define space register type=register_space size=4;
+
+#define general purpose registers
+define register offset=0 size=4          [EAX ECX EDX EBX ESP EBP ESI EDI];
+define register offset=0 size=2          [AX  CX  DX  BX  SP  BP  SI  DI];
+define register offset=0 size=1          [AL  AH  CL  CH  DL  DH  BL  BH];
+define register offset=0x2000 size=10    [ST0];
+define register offset=0x100 size=2          [ES CS SS DS FS GS];
+define register offset=0x110 size=$(SIZE)    [FS_OFFSET GS_OFFSET];
+
+#Flags
+define register offset=0x200 size=1      [CF F1 PF F3 AF F5 ZF SF
+                                          TF IF DF OF IOPL NT F15
+                                          RF VM AC VIF VIP ID];
+define register offset=0x280 size=4      [eflags EIP];
+define register offset=0x280 size=2      [flags _ IP];
+
+#Context bits
+define register offset=0x2000 size=4     [contextReg];
+
+define context contextReg
+    opSize = (2,3)
+    prefix = (10,10)
+    addrsize = (1,1)
+    segover = (4,6)
+    highseg=(4,4)       
+    opprefx=(10,10)       
+    prefix_66=(10,10)     
+    prefix_f3=(9,9)       
+    prefix_f2=(8,8)       
+    mandover=(8,10)
+    suffix3D=(17,24)
+    instrPhase=(31,31)
+;
+define token opcode(8)
+    high5=(3,7)
+    op = (0,7)
+;
+
+define token modRM(8)
+    mod = (6,7)
+    row = (4,7)
+    col = (0,2)
+    page = (3,3)
+    regOp = (3,5)
+    reg32 = (3,5)
+    reg16 = (3,5)
+    reg8 = (3,5)
+    r32 = (0,2)
+    r16 = (0,2)
+    r8 = (0,2)
+    rm = (0,2)
+    xmmmod = (6,7)
+    xmmreg = (3,5)
+    r_m = (0,2)
+;
+
+define token sib (8)
+    ss = (6,7)
+    base = (0,2)
+    index = (3,5)
+;
+
+define token I8 (8)
+    imm8=(0,7)
+    simm8=(0,7) signed
+;
+
+define token I16 (16)
+    imm16=(0,15)
+    simm16=(0,15) signed
+;
+
+define token I32 (32)
+    imm32=(0,31)
+    simm32=(0,31) signed
+;
+
+define token override(8)
+    over = (0,7)
+;
+
+attach values ss [ 1 2 4 8];
+attach variables [r32 reg32 base index]  [EAX ECX EDX EBX ESP EBP ESI EDI];
+attach variables [r16 reg16]             [AX  CX  DX  BX  SP  BP  SI  DI];
+attach variables [r8  reg8]              [AL  CL  DL  BL  AH  CH  DH  BH];
+
+segWide: is segover=0		    { }
+seg16: 	 is segover=0			{ }
+
+Base:  base   is base               { }
+Index: index  is index              { }
+
+Reg8:  reg8  is reg8                { }
+Reg16: reg16 is reg16               { }
+Reg32: reg32 is reg32               { }
+
+Rmr8:  r8      is r8                 { }
+Rmr16: r16     is r16                { }
+Rmr32: r32     is r32                { }
+
+rm8: Rmr8      is mod=3 & Rmr8       { }
+rm16: Rmr16    is mod=3 & Rmr16      { }
+rm32: Rmr32    is mod=3 & Rmr32      { }
+
+rm16: [BX + SI]		is mod=0 & r_m=0 & BX & SI		{ }
+rm16: [BX + DI]		is mod=0 & r_m=1 & BX & DI		{ }
+rm16: [BP + SI]		is mod=0 & r_m=2 & BP & SI		{ }
+rm16: [BP + DI]		is mod=0 & r_m=3 & BP & DI		{ }
+rm16: [SI]		    is mod=0 & r_m=4 & SI			{ }
+rm16: [DI]		    is mod=0 & r_m=5 & DI			{ }
+rm16: [imm16]		is mod=0 & r_m=6; imm16			{ }
+rm16: [BX]		    is mod=0 & r_m=7 & BX			{ }
+rm16: [BX + SI + simm8]   is mod=1 & r_m=0 & BX & SI; simm8   { }
+rm16: [BX + DI + simm8]   is mod=1 & r_m=1 & BX & DI; simm8   { }
+rm16: [BP + SI + simm8]   is mod=1 & r_m=2 & BP & SI; simm8   { }
+rm16: [BP + DI + simm8]   is mod=1 & r_m=3 & BP & DI; simm8   { }
+rm16: [SI + simm8]  is mod=1 & r_m=4 & SI; simm8        { }
+rm16: [DI + simm8]  is mod=1 & r_m=5 & DI; simm8        { }
+rm16: [BP + simm8]  is mod=1 & r_m=6 & BP; simm8        { }
+rm16: [BX + simm8]  is mod=1 & r_m=7 & BX; simm8        { }
+rm16: [BX + SI + imm16]   is mod=2 & r_m=0 & BX & SI; imm16   { }
+rm16: [BX + DI + imm16]   is mod=2 & r_m=1 & BX & DI; imm16   { }
+rm16: [BP + SI + imm16]   is mod=2 & r_m=2 & BP & SI; imm16   { }
+rm16: [BP + DI + imm16]   is mod=2 & r_m=3 & BP & DI; imm16   { }
+rm16: [SI + imm16]  is mod=2 & r_m=4 & SI; imm16        { }
+rm16: [DI + imm16]  is mod=2 & r_m=5 & DI; imm16        { }
+rm16: [BP + imm16]  is mod=2 & r_m=6 & BP; imm16        { }
+rm16: [BX + imm16]  is mod=2 & r_m=7 & BX; imm16        { }
+
+rm32: [Rmr32]							is mod=0 & Rmr32  							 { }
+rm32: [Rmr32 + simm8]				    is mod=1 & Rmr32; simm8       			     { }
+rm32: [Rmr32]							is mod=1 & r_m!=4 & Rmr32; simm8=0			 { }
+rm32: [Rmr32 + imm32]					is mod=2 & Rmr32; imm32                      { }
+rm32: [Rmr32]							is mod=2 & r_m!=4 & Rmr32; imm32=0           { }
+rm32: [imm32]							is mod=0 & r_m=5; imm32                      { }
+rm32: [Base + Index*ss]				    is mod=0 & r_m=4; Index & Base & ss          { }
+rm32: [Base]							is mod=0 & r_m=4; index=4 & Base             { }
+rm32: [Index*ss + imm32]				is mod=0 & r_m=4; Index & base=5 & ss; imm32 { }
+rm32: [imm32]							is mod=0 & r_m=4; index=4 & base=5; imm32    { }
+rm32: [Base + Index*ss + simm8]	        is mod=1 & r_m=4; Index & Base & ss; simm8   { }
+rm32: [Base + simm8]				    is mod=1 & r_m=4; index=4 & Base; simm8      { }
+rm32: [Base + Index*ss]				    is mod=1 & r_m=4; Index & Base & ss; simm8=0 { }
+rm32: [Base]							is mod=1 & r_m=4; index=4 & Base; simm8=0    { }
+rm32: [Base + Index*ss + imm32]		    is mod=2 & r_m=4; Index & Base & ss; imm32   { }
+rm32: [Base + imm32]					is mod=2 & r_m=4; index=4 & Base; imm32      { }
+rm32: [Base + Index*ss]				    is mod=2 & r_m=4; Index & Base & ss; imm32=0 { }
+rm32: [Base]							is mod=2 & r_m=4; index=4 & Base; imm32=0    { }
+
+moffs16: seg16^[imm32]  is addrsize=1 & seg16 & imm32                   { }
+#moffs16: segWide^[imm32]  is addrsize=1 & highseg=1 & segWide & imm32   { }
+#moffs16: segWide^[imm32]  is addrsize=1 & segWide & imm32               { }
+
+:^instruction is instrPhase=0 & over=0x66; instruction              [ opSize=opSize $xor 1; mandover = mandover $xor 1;] {}
+:^instruction is instrPhase=0 & over=0x67; instruction              [ addrsize=addrsize $xor 1; ] {}
+
+:ADD AL, imm8     is op=0x04; AL & imm8                         { }
+:ADD AX, imm16    is opSize=1 & op=0x05; AX & imm16             { }
+:ADD EAX, imm32   is opSize=0 & op=0x05; EAX & imm32            { }
+:ADD rm8,imm8	  is op=0x80; rm8; imm8                         { }
+:ADD rm16,imm16   is opSize=1 & op=0x81; rm16; imm16	        { }
+:ADD rm32,imm32	  is opSize=0 & op=0x81; rm32; imm32	        { }
+:ADD rm16,simm8	  is opSize=1 & op=0x83; rm16; simm8	        { }
+:ADD rm32,simm8	  is opSize=0 & op=0x83; rm32; simm8	        { }
+:ADD Reg8, rm8    is op=0x02; rm8 & Reg8                        { }
+:ADD Reg16, rm16  is opSize=1 & op=0x03; rm16 & Reg16 ...       { }
+:ADD Reg32, rm32  is opSize=0 & op=0x03; rm32 & Reg32 ...       { }
+:ADD rm8, Reg8    is op=0x00; rm8 & Reg8                        { }
+:ADD rm16, Reg16  is opSize=1 & op=0x01; rm16 & Reg16 ...       { }
+:ADD rm32, Reg32  is opSize=0 & op=0x01; rm32 & Reg32 ...       { }
+
+:POP rm16         is addrsize=0 & opSize=1 & op=0x8f; rm16 & regOp=0 ... { }
+:POP rm16         is addrsize=1 & opSize=1 & op=0x8f; rm16 & regOp=0 ... { }
+:POP rm32         is addrsize=0 & opSize=0 & op=0x8f; rm32 & regOp=0 ... { }
+:POP rm32         is addrsize=1 & opSize=0 & op=0x8f; rm32 & regOp=0 ... { }
+:POP Rmr16        is addrsize=0 & opSize=1 & row=5 & page=1 & Rmr16       { }
+:POP Rmr16        is addrsize=1 & opSize=1 & row=5 & page=1 & Rmr16       { }
+:POP Rmr32        is addrsize=0 & opSize=0 & row=5 & page=1 & Rmr32 	  { }
+:POP Rmr32        is addrsize=1 & opSize=0 & row=5 & page=1 & Rmr32 	  { }
+:POP AX           is addrsize=0 & opSize=1 & op=0x58  & AX                           { }
+:POP EAX          is addrsize=1 & opSize=0 & op=0x58  & EAX                          { }
+:POP CX           is addrsize=0 & opSize=1 & op=0x59  & CX                           { }
+:POP ECX          is addrsize=1 & opSize=0 & op=0x59  & ECX                          { }
+:POP DX           is addrsize=0 & opSize=1 & op=0x5a  & DX                           { }
+:POP EDX          is addrsize=1 & opSize=0 & op=0x5a  & EDX                          { }
+:POP BX           is addrsize=0 & opSize=1 & op=0x5b  & BX                           { }
+:POP EBX          is addrsize=1 & opSize=0 & op=0x5b  & EBX                          { }
+:POP SP           is addrsize=0 & opSize=1 & op=0x5c  & SP                           { }
+:POP ESP          is addrsize=1 & opSize=0 & op=0x5c  & ESP                          { }
+:POP BP           is addrsize=0 & opSize=1 & op=0x5d  & BP                           { }
+:POP EBP          is addrsize=1 & opSize=0 & op=0x5d  & EBP                          { }
+:POP SI           is addrsize=0 & opSize=1 & op=0x5e  & SI                           { }
+:POP ESI          is addrsize=1 & opSize=0 & op=0x5e  & ESI                          { }
+:POP DI           is addrsize=0 & opSize=1 & op=0x5f  & DI                           { }
+:POP EDI          is addrsize=1 & opSize=0 & op=0x5f  & EDI                          { }
+:POP DS           is addrsize=0 & op=0x1f  & DS                           { }
+:POP DS           is addrsize=1 & op=0x1f  & DS                           { }
+:POP ES           is addrsize=0 & op=0x07  & ES                           { }
+:POP ES           is addrsize=1 & op=0x07  & ES                           { }
+:POP SS           is addrsize=0 & op=0x17  & SS                           { }
+:POP SS           is addrsize=1 & op=0x17  & SS                           { }
+:POP FS           is addrsize=0 & op=0x0f; op=0xa1 & FS                    { }
+:POP FS           is addrsize=1 & op=0x0f; op=0xa1 & FS                    { }
+:POP GS           is addrsize=0 & op=0x0f; op=0xa9 & GS                    { }
+:POP GS           is addrsize=1 & op=0x0f; op=0xa9 & GS                    { }
+
+
+:PUSH rm16        is addrsize=0 & opSize=1 & op=0xff; rm16 & regOp=6 ...     { }
+:PUSH rm16        is addrsize=1 & opSize=1 & op=0xff; rm16 & regOp=6 ...     { }
+:PUSH rm32        is addrsize=0 & opSize=0 & op=0xff; rm32 & regOp=6 ...     { }
+:PUSH rm32        is addrsize=1 & opSize=0 & op=0xff; rm32 & regOp=6 ...     { }
+:PUSH Rmr16       is addrsize=0 & opSize=1 & row=5 & page=0 & Rmr16       { }
+:PUSH Rmr16       is addrsize=1 & opSize=1 & row=5 & page=0 & Rmr16       { }
+:PUSH Rmr32       is addrsize=0 & opSize=0 & row=5 & page=0 & Rmr32       { }
+:PUSH Rmr32       is addrsize=1 & opSize=0 & row=5 & page=0 & Rmr32       { }
+:PUSH simm8       is addrsize=0 & opSize=1 & op=0x6a; simm8               { }
+:PUSH simm8       is addrsize=1 & opSize=1 & op=0x6a; simm8               { }
+:PUSH simm8       is addrsize=0 & opSize=0 & op=0x6a; simm8               { }
+:PUSH simm8       is addrsize=1 & opSize=0 & op=0x6a; simm8               { }
+:PUSH simm16      is addrsize=0 & opSize=1 & op=0x68; simm16              { }
+:PUSH simm16      is addrsize=1 & opSize=1 & op=0x68; simm16              { }
+:PUSH imm32       is addrsize=0 & opSize=0 & op=0x68; imm32               { }
+:PUSH imm32       is addrsize=1 & opSize=0 & op=0x68; imm32               { }
+:PUSH AX          is addrsize=0 & op=0x50 & AX                            { }
+:PUSH EAX         is addrsize=1 & op=0x50 & EAX                           { }
+:PUSH CX          is addrsize=0 & op=0x51 & CX                            { }
+:PUSH ECX         is addrsize=1 & op=0x51 & ECX                           { }
+:PUSH DX          is addrsize=0 & op=0x52 & DX                            { }
+:PUSH EDX         is addrsize=1 & op=0x52 & EDX                           { }
+:PUSH BX          is addrsize=0 & op=0x53 & BX                            { }
+:PUSH EBX         is addrsize=1 & op=0x53 & EBX                           { }
+:PUSH SP          is addrsize=0 & op=0x54 & SP                            { }
+:PUSH ESP         is addrsize=1 & op=0x54 & ESP                           { }
+:PUSH BP          is addrsize=0 & op=0x55 & BP                            { }
+:PUSH EBP         is addrsize=1 & op=0x55 & EBP                           { }
+:PUSH SI          is addrsize=0 & op=0x56 & SI                            { }
+:PUSH ESI         is addrsize=1 & op=0x56 & ESI                           { }
+:PUSH DI          is addrsize=0 & op=0x57 & DI                            { }
+:PUSH EDI         is addrsize=1 & op=0x57 & EDI                           { }
+:PUSH CS          is addrsize=0 & op=0x0e & CS                            { }
+:PUSH CS          is addrsize=1 & op=0x0e & CS                            { }
+:PUSH SS          is addrsize=0 & op=0x16 & SS                            { }
+:PUSH SS          is addrsize=1 & op=0x16 & SS                            { }
+:PUSH DS          is addrsize=0 & op=0x1e & DS                            { }
+:PUSH DS          is addrsize=1 & op=0x1e & DS                            { }
+:PUSH ES          is addrsize=0 & op=0x06 & ES                            { }
+:PUSH ES          is addrsize=1 & op=0x06 & ES                            { }
+:PUSH FS          is addrsize=0 & op=0x0f; op=0xa0 & FS                   { }
+:PUSH FS          is addrsize=1 & op=0x0f; op=0xa0 & FS                   { }
+:PUSH GS          is addrsize=0 & op=0x0f; op=0xa8 & GS                   { }
+:PUSH GS          is addrsize=1 & op=0x0f; op=0xa8 & GS                   { }
+
+:MOV Reg8, rm8    is op=0x8a; rm8 & Reg8                                  { }
+:MOV Reg16, rm16  is opSize=1 & op=0x8b; rm16 & Reg16 ...                 { }
+:MOV Reg32, rm32  is opSize=0 & op=0x8b; rm32 & Reg32 ...                 { }
+:MOV rm8, Reg8    is op=0x88; rm8 & Reg8                                  { }
+:MOV rm16, Reg16  is opSize=1 & op=0x89; rm16 & Reg16 ...                 { }
+:MOV rm32, Reg32  is opSize=0 & op=0x89; rm32 & Reg32 ...                 { }
+:MOV Reg8,imm8    is op=0xc6 ; Reg8 & regOp=0; imm8                       { }
+:MOV AX,imm16     is opSize=1 & op=0xb8; AX; imm16                        { }
+:MOV EAX,imm32    is opSize=0 & op=0xb8; EAX; imm32                       { }
+:MOV CL, imm8     is op=0xb1; CL; imm8                                    { }
+:MOV [imm32], AX     is opSize=1 & op=0xa3; imm32 & AX                { }
+:MOV imm32, EAX    is opSize=0 & op=0xa3; imm32 & EAX                 { }
+
+
+:LEAVE           is addrsize=0 & op=0xc9                     { }
+:LEAVE           is addrsize=1 & op=0xc9                     { }
+
+:RET            is addrsize=0 & opSize=1 & op=0xc3           { }
+:RET            is addrsize=1 & opSize=1 & op=0xc3           { }
+:RET            is addrsize=0 & opSize=0 & op=0xc3           { }
+:RET            is addrsize=1 & opSize=0 & op=0xc3           { }
+:RET            is addrsize=0 & opSize=1 & op=0xcb           { }        
+:RET            is addrsize=1 & opSize=1 & op=0xcb           { }
+:RET            is addrsize=0 & opSize=0 & op=0xcb           { }
+:RET            is addrsize=1 & opSize=0 & op=0xcb           { }        
+:RET imm16      is addrsize=0 & opSize=1 & op=0xc2; imm16    { }      
+:RET imm16      is addrsize=1 & opSize=1 & op=0xc2; imm16    { }        
+:RET imm16      is addrsize=0 & opSize=0 & op=0xc2; imm16    { }
+:RET imm16      is addrsize=1 & opSize=0 & op=0xc2; imm16    { }
+:RET imm16      is addrsize=0 & opSize=1 & op=0xca; imm16    { }       
+:RET imm16      is addrsize=1 & opSize=1 & op=0xca; imm16    { }
+:RET imm16      is addrsize=0 & opSize=0 & op=0xca; imm16    { }
+:RET imm16      is addrsize=1 & opSize=0 & op=0xca; imm16    { }
+
+:NOP            is opSize=0 & op=0x90                        { }
+:NOP            is opSize=1 & op=0x90                        { }
+:NOP rm16       is mandover & opSize=0 & op=0x0f; high5=3; rm16  ...    { }
+:NOP rm32       is mandover & opSize=1 & op=0x0f; high5=3; rm32  ...    { }
+:NOP rm16       is mandover & opSize=0 & op=0x0f; op=0x1f; rm16 & regOp=0 ... { }
+:NOP rm32       is mandover & opSize=1 & op=0x0f; op=0x1f; rm32 & regOp=0 ... { }
